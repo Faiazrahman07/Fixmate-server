@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId  } from "mongodb";
 import 'dotenv/config';
 
 const app = express();
@@ -17,13 +17,33 @@ export async function connectToMongoDB() {
     console.dir(err);
   }
 }
-await connectToMongoDB();
+const Connectedclient = await connectToMongoDB();
+const database = Connectedclient.db("Fixmate");
+const user = database.collection('user');
+const services = database.collection('services');
 app.use(express.json());
 app.use(cors());
 app.get('/', (req, res ) => {
   res.send('Hello World!');
 });
+app.get('/users',async(req,res)=>{
+  const cursor = user.find({});
+  const result  = await cursor.toArray();
+  res.send(result);
+});
+app.get('/api/services',async(req,res)=>{
+  const cursor = services.find({});
+  const result  = await cursor.toArray();
+  res.send(result);
+});
+app.get('/api/services/:id', async (req, res) => {
+  const id = req.params.id;
+  const result = await services.findOne({
+    _id: new ObjectId(id)
+  });
 
+  res.send(result);
+});
 app.listen(PORT,()=>{
     console.log(`server is running on port ${PORT}`);
 });
