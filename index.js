@@ -21,6 +21,7 @@ const Connectedclient = await connectToMongoDB();
 const database = Connectedclient.db("Fixmate");
 const user = database.collection('user');
 const services = database.collection('services');
+const bookings = database.collection("bookings");
 app.use(express.json());
 app.use(cors());
 app.get('/', (req, res ) => {
@@ -43,6 +44,60 @@ app.get('/api/services/:id', async (req, res) => {
   });
 
   res.send(result);
+});
+app.post('/api/services', async (req, res) => {
+  const service = req.body;
+
+  const result = await services.insertOne(service);
+
+  res.send(result);
+});
+app.patch('/api/services/:id', async (req, res) => {
+  const id = req.params.id;
+  const updatedData = req.body;
+
+  const result = await services.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: updatedData }
+  );
+
+  res.send(result);
+});
+app.delete('/api/services/:id', async (req, res) => {
+  const id = req.params.id;
+
+  const result = await services.deleteOne({
+    _id: new ObjectId(id)
+  });
+
+  res.send(result);
+});
+app.get('/api/my-services/:email', async (req, res) => {
+  const email = req.params.email;
+
+  const result = await services.find({
+    technicianEmail: email
+  }).toArray();
+
+  res.send(result);
+});
+app.post('/api/bookings', async (req, res) => {
+  const booking = req.body;
+
+  const result = await bookings.insertOne(booking);
+
+  res.send(result);
+});
+app.get('/api/bookings/check/:serviceId/:email', async (req, res) => {
+  const { serviceId, email } = req.params;
+
+  const result = await bookings.findOne({
+    serviceId,
+    customerEmail: email,
+    status: { $in: ["requested", "accepted", "in-progress"] }
+  });
+
+  res.send({ alreadyBooked: !!result });
 });
 app.listen(PORT,()=>{
     console.log(`server is running on port ${PORT}`);
