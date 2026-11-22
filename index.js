@@ -1153,6 +1153,28 @@ app.use((req, res) => {
   });
 });
 
+app.use((error, req, res, next) => {
+  console.error(
+    `Unhandled API Error: ${req.method} ${req.originalUrl}`,
+    error.stack || error.message
+  );
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  const status =
+    Number.isInteger(error.status) &&
+    error.status >= 400 &&
+    error.status < 600
+      ? error.status
+      : 500;
+
+  res.status(status).send({
+    message: status >= 500 ? "Internal server error" : "Invalid request",
+  });
+});
+
 const server = app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
