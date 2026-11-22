@@ -1088,6 +1088,10 @@ app.get(
       if (existingPayment) {
         return res.send({
           message: "Payment already verified",
+          amount: existingPayment.amount,
+          transactionId: existingPayment.transactionId,
+          paymentDate: existingPayment.paymentDate,
+          paymentId: existingPayment._id,
           payment: existingPayment,
         });
       }
@@ -1142,6 +1146,12 @@ app.get(
     }
   }
 );
+
+app.use((req, res) => {
+  res.status(404).send({
+    message: "Route not found",
+  });
+});
 
 const server = app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
