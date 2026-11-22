@@ -11,8 +11,20 @@ const PORT = process.env.PORT || 5000;
 
 const AUTH_URL = process.env.AUTH_URL || "http://localhost:3000";
 
+const { DB_USER, DB_PASSWORD } = process.env;
+
+if (!DB_USER || !DB_PASSWORD) {
+  console.error(
+    "MongoDB configuration error: DB_USER and DB_PASSWORD must be set."
+  );
+  process.exit(1);
+}
+
 const client = new MongoClient(
-  `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.ofxhydd.mongodb.net/`
+  `mongodb+srv://${DB_USER}:${DB_PASSWORD}@cluster0.ofxhydd.mongodb.net/`,
+  {
+    serverSelectionTimeoutMS: 10000,
+  }
 );
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -23,17 +35,26 @@ app.use(cors());
 async function connectToMongoDB() {
   try {
     await client.connect();
+    await client.db("admin").command({ ping: 1 });
     console.log("Successfully connected to MongoDB!");
     return client;
   } catch (error) {
-    console.error("MongoDB Connection Error:", error);
+    console.error("MongoDB Connection Error:", error.message);
     throw error;
   }
 }
 
-const Connectedclient = await connectToMongoDB();
+let database;
 
-const database = Connectedclient.db("Fixmate");
+try {
+  const connectedClient = await connectToMongoDB();
+  database = connectedClient.db("Fixmate");
+} catch (error) {
+  console.error(
+    "Failed to connect to MongoDB. The server will not start."
+  );
+  process.exit(1);
+}
 
 const user = database.collection("user");
 const services = database.collection("services");
@@ -1116,6 +1137,29 @@ app.get(
   }
 );
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+server.on("error", (error) => {
+  console.error("Server failed to start:", error.message);
+  process.exit(1);
+});
+
+async function shutdown(signal) {
+  console.log(`${signal} received. Shutting down gracefully...`);
+
+  server.close(async () => {
+    try {
+      await client.close();
+      console.log("MongoDB connection closed.");
+      process.exit(0);
+    } catch (error) {
+      console.error("Error closing MongoDB connection:", error.message);
+      process.exit(1);
+    }
+  });
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
