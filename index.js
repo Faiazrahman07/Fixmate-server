@@ -204,6 +204,12 @@ app.get("/api/services", async (req, res) => {
   try {
     const { search, category, serviceMode, sort } = req.query;
 
+    if (typeof search === "string" && search.length > 100) {
+      return res.status(400).send({
+        message: "Search query must be 100 characters or fewer",
+      });
+    }
+
     const query = {
       status: "approved",
     };
