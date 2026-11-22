@@ -181,7 +181,7 @@ app.patch("/api/users/profile", verifyToken, async (req, res) => {
 
 app.get("/api/services", async (req, res) => {
   try {
-    const { search, category, sort } = req.query;
+    const { search, category, serviceMode, sort } = req.query;
 
     const query = {
       status: "approved",
@@ -191,26 +191,23 @@ app.get("/api/services", async (req, res) => {
       query.$or = [
         { title: { $regex: search, $options: "i" } },
         { category: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
       ];
     }
 
-
     if (category && category !== "all") {
-      query.category = {
-        $regex: `^${category}$`,
-        $options: "i",
-      };
+      query.category = category;
     }
 
-    let sortOption = { _id: -1 };
-
-  
-    if (sort === "price-low") {
-      sortOption = { price: 1 };
-    } else if (sort === "price-high") {
-      sortOption = { price: -1 };
+    if (serviceMode && serviceMode !== "all") {
+      query.serviceMode = serviceMode;
     }
+
+    const sortOption =
+      sort === "price-low"
+        ? { basePrice: 1 }
+        : sort === "price-high"
+          ? { basePrice: -1 }
+          : { createdAt: -1 };
 
     const result = await services
       .find(query)
@@ -219,7 +216,8 @@ app.get("/api/services", async (req, res) => {
 
     res.send(result);
   } catch (error) {
-    console.error("Services fetch error:", error);
+    console.error("Services Fetch Error:", error);
+
     res.status(500).send({
       message: "Failed to fetch services",
     });
@@ -921,7 +919,7 @@ app.post(
         line_items: [
           {
             price_data: {
-              currency: "usd",
+              currency: "bdt",
               product_data: {
                 name: booking.serviceTitle || "FixMate Service",
               },
@@ -1038,7 +1036,7 @@ app.get(
       }
 
     
-      if (session.currency !== "usd") {
+      if (session.currency !== "bdt") {
         return res.status(400).send({
           message: "Invalid payment currency",
         });
