@@ -2,12 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import { MongoClient, ObjectId  } from "mongodb";
 import 'dotenv/config';
-
+import Stripe from "stripe";
 const app = express();
 const PORT = process.env.PORT || 5000
 const client = new MongoClient(
 `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.ofxhydd.mongodb.net/`);
-
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 export async function connectToMongoDB() {
   try {
     await client.connect();
@@ -218,6 +218,128 @@ app.get('/api/admin/bookings', async (req, res) => {
 app.get('/api/admin/payments', async (req, res) => {
   const result = await payments.find().sort({ _id: -1 }).toArray();
   res.send(result);
+});
+app.post('/api/payments/create-checkout-session', async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+
+    if (!ObjectId.isValid(bookingId)) {
+      return res.status(400).send({
+        message: "Invalid booking ID"
+      });
+    }
+
+
+    const booking = await bookings.findOne({
+      _id: new ObjectId(bookingId)
+    });
+
+    if (!booking) {
+      return res.status(404).send({
+        message: "Booking not found"
+      });
+    }
+
+
+    if (booking.status !== "completed") {
+      return res.status(400).send({
+        message: "Booking is not completed yet"
+      });
+    }
+
+    if (booking.paymentStatus === "paid") {
+      return res.status(400).send({
+        message: "This booking is already paid"
+      });
+    }
+
+    const amount = Number(booking.finalAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).send({
+        message: "Invalid payment amount"
+      });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+
+      mode: "payment",
+
+      customer_email: booking.customerEmail,
+
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: booking.serviceTitle,
+            },
+            unit_amount: Math.round(amount * 100),
+          },
+          quantity: 1,
+        },
+      ],
+
+      metadata: {
+        bookingId: booking._id.toString(),
+        customerEmail: booking.customerEmail,
+      },
+
+      success_url: `${process.env.CLIENT_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+
+      cancel_url: `${process.env.CLIENT_URL}/payment/cancel`,
+    });
+
+    res.send({
+      url: session.url
+    });
+
+  } catch (error) {
+    console.error("Stripe Checkout Error:", error);
+
+    res.status(500).send({
+      message: "Failed to create checkout session"
+    });
+  }
+});
+app.patch('/api/users/profile', async (req, res) => {
+  try {
+    const { email, name, image } = req.body;
+
+    if (!email) {
+      return res.status(400).send({
+        message: "Email is required"
+      });
+    }
+
+    const result = await user.updateOne(
+      { email },
+      {
+        $set: {
+          name,
+          image
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({
+        message: "User not found"
+      });
+    }
+
+    res.send({
+      message: "Profile updated successfully",
+      result
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      message: "Failed to update profile"
+    });
+  }
 });
 app.listen(PORT,()=>{
     console.log(`server is running on port ${PORT}`);
